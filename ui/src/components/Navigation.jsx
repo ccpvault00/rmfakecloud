@@ -15,7 +15,8 @@ const NavigationBar = () => {
     return user && user.Roles && user.Roles[0] === "Admin";
   }
   return (
-    <Navbar className="sticky-top">
+    // without `expand` react-bootstrap never collapses the menu, so links overflowed off-screen on phones
+    <Navbar className="sticky-top" expand="md" collapseOnSelect>
       <Container fluid>
         <Navbar.Brand>
           <Nav.Link as={NavLink} to="/">
@@ -29,29 +30,29 @@ const NavigationBar = () => {
               <Nav>
                 {" "}
                 <Nav.Item>
-                  <Nav.Link as={NavLink} to="/documents">
+                  <Nav.Link as={NavLink} to="/documents" eventKey="/documents">
                     Documents
                   </Nav.Link>
                 </Nav.Item>
                 <Nav.Item>
-                  <Nav.Link as={NavLink} to="/integrations">
+                  <Nav.Link as={NavLink} to="/integrations" eventKey="/integrations">
                     Integrations
                   </Nav.Link>
                 </Nav.Item>
                 <Nav.Item>
-                  <Nav.Link as={NavLink} to="/connect">
+                  <Nav.Link as={NavLink} to="/connect" eventKey="/connect">
                     Connect
                   </Nav.Link>
                 </Nav.Item>
                 <Nav.Item>
-                  <Nav.Link as={NavLink} to="/screenshare">
+                  <Nav.Link as={NavLink} to="/screenshare" eventKey="/screenshare">
                     Screen Share
                   </Nav.Link>
                 </Nav.Item>
 				{ isAdmin() &&
 
 					<Nav.Item>
-					  <Nav.Link as={NavLink} to="/admin">
+					  <Nav.Link as={NavLink} to="/admin" eventKey="/admin">
 						Admin	
 					  </Nav.Link>
 					</Nav.Item>

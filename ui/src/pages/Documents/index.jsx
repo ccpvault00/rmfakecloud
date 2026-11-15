@@ -229,7 +229,7 @@ export default function DocumentList() {
   return (
     <Container fluid style={{height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", padding: "25px 0 20px 0"}}>
         <Row style={{flex: "1 1 auto", minHeight: 0}}>
-          <Col md={4} style={{display: "flex", flexDirection: "column", height: "100%"}}>
+          <Col md={4} className={styles.treeCol}>
             <Navbar style={{flexShrink: 0}}>
               <div className={`${styles.stretch} ${styles.userid}`}>{user.UserID}</div>
               <Button variant="outline" onClick={() => { setShowSearch(!showSearch); setTerm("") }}><BsSearch/></Button>
@@ -249,7 +249,7 @@ export default function DocumentList() {
               <DocumentTree selection={selected} onSelect={onSelect} treeRef={treeRef} term={term} entries={entries} height={treeHeight} />
             </div>
           </Col>
-          <Col md={8} style={{display: "flex", flexDirection: "column", height: "100%"}}>
+          <Col md={8} className={styles.contentCol}>
             <div style={{flex: "1 1 auto", minHeight: 0, overflow: "auto"}}>
               {selected && selected.isLeaf && <File file={selected} onSelect={onSelect} />}
               {selected && !selected.isLeaf && <Folder selection={selected} onSelect={onSelect} onUpdate={onUpdate} counter={counter} />}

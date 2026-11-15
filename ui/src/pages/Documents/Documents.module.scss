@@ -1,5 +1,25 @@
 @import "../../theme.scss";
 
+.treeCol,
+.contentCol {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+// Below Bootstrap's md breakpoint the two columns stack. With both at height:100% inside an
+// overflow:hidden container, the file/folder pane was pushed off-screen on phones, so split
+// the height between them instead.
+@media (max-width: 767.98px) {
+    .treeCol {
+        height: 35%;
+    }
+
+    .contentCol {
+        height: 65%;
+    }
+}
+
 .treeContainer {
     height: 100%;
 
