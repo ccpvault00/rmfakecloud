@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"path"
 	"strings"
@@ -37,7 +38,7 @@ func ArchiveFromHashDoc(doc *HashDoc, rs RemoteStorage) (*exporter.MyArchive, er
 			if err != nil {
 				return nil, err
 			}
-			err = json.Unmarshal(contentBytes, &a.Content)
+			a.Content, err = parseContent(contentBytes)
 			if err != nil {
 				return nil, err
 			}
@@ -91,4 +92,41 @@ func ArchiveFromHashDoc(doc *HashDoc, rs RemoteStorage) (*exporter.MyArchive, er
 	}
 
 	return &a, nil
+}
+
+// pageTag is a page tag as written by firmware 3.x (formatVersion 2 .content).
+type pageTag struct {
+	Name string `json:"name"`
+}
+
+// parseContent decodes a .content file. rmapi's archive.Content declares pageTags as
+// []string, but firmware 3.x writes objects ({"name","pageId","timestamp"}), which made
+// every export of a document with tagged pages fail with a 500. The outer Tags field
+// shadows the embedded one so both shapes are accepted.
+func parseContent(data []byte) (archive.Content, error) {
+	var c struct {
+		archive.Content
+		Tags json.RawMessage `json:"pageTags"`
+	}
+	if err := json.Unmarshal(data, &c); err != nil {
+		return archive.Content{}, err
+	}
+	if len(c.Tags) == 0 || string(c.Tags) == "null" {
+		return c.Content, nil
+	}
+
+	var names []string
+	if err := json.Unmarshal(c.Tags, &names); err == nil {
+		c.Content.Tags = names
+		return c.Content, nil
+	}
+	var tags []pageTag
+	if err := json.Unmarshal(c.Tags, &tags); err != nil {
+		return archive.Content{}, fmt.Errorf("pageTags: neither strings nor tag objects: %w", err)
+	}
+	c.Content.Tags = make([]string, 0, len(tags))
+	for _, t := range tags {
+		c.Content.Tags = append(c.Content.Tags, t.Name)
+	}
+	return c.Content, nil
 }
