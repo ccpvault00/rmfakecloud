@@ -2,11 +2,13 @@ package rmv6
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // expected is the JSON written by testdata/oracle_dump.py (rmscene as the reference).
@@ -145,5 +147,51 @@ func TestCorruptInputNeverPanics(t *testing.T) {
 			buf[i] ^= x
 			_, _ = Parse(buf)
 		}
+	}
+}
+
+// TestOrderLongChain: a real page is one long chain (each stroke left of the next);
+// ordering must stay fast and keep the chain order even when ids run backwards.
+func TestOrderLongChain(t *testing.T) {
+	const n = 100000
+	items := make([]*item, n)
+	for i := range items {
+		// position i gets id n-i, so id order is the reverse of the chain order
+		items[i] = &item{id: crdtID{1, uint64(n - i)}}
+	}
+	for i := range items {
+		if i > 0 {
+			items[i].left = items[i-1].id
+		}
+		if i < n-1 {
+			items[i].right = items[i+1].id
+		}
+	}
+	shuffled := append([]*item(nil), items...)
+	for i := range shuffled { // deterministic shuffle
+		j := (i * 7919) % n
+		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
+	}
+	t0 := time.Now()
+	got := order(shuffled)
+	if d := time.Since(t0); d > 2*time.Second {
+		t.Errorf("ordering %d items took %v", n, d)
+	}
+	if len(got) != n {
+		t.Fatalf("got %d items", len(got))
+	}
+	for i := range got {
+		if got[i] != items[i] {
+			t.Fatalf("position %d: %s, want %s", i, fmt.Sprint(got[i].id), fmt.Sprint(items[i].id))
+		}
+	}
+}
+
+func TestOrderCycleKeepsAllItems(t *testing.T) {
+	a := &item{id: crdtID{1, 1}}
+	b := &item{id: crdtID{1, 2}}
+	a.left, b.left = b.id, a.id // a after b and b after a
+	if got := order([]*item{a, b}); len(got) != 2 || got[0] != a || got[1] != b {
+		t.Errorf("cycle: %v", got)
 	}
 }

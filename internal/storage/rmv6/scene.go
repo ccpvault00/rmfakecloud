@@ -356,85 +356,80 @@ func readGlyph(v *reader) (*Highlight, error) {
 	return g, nil
 }
 
-// order sorts sibling items by their left/right links (rmscene's toposort_items):
-// repeatedly emit every item whose left neighbour is already placed and which no
-// unplaced item must precede, ties broken by id.
+// order sorts sibling items by their left/right links like rmscene's toposort_items:
+// in rounds, emit every item whose dependencies are all placed, ties broken by id.
+// Kahn's algorithm with in-degree counts keeps this O(n log n); real sequences are
+// chains (each stroke left of the next), where a rescan per round would be O(n²).
 func order(items []*item) []*item {
-	byID := make(map[crdtID]*item, len(items))
-	for _, it := range items {
-		byID[it.id] = it
+	n := len(items)
+	if n == 0 {
+		return nil
 	}
-	const start, end = "start", "end"
-	key := func(id crdtID) string { return fmt.Sprintf("%d:%d", id.p1, id.p2) }
-	deps := map[string]map[string]bool{}
-	add := func(k, dep string) {
-		if deps[k] == nil {
-			deps[k] = map[string]bool{}
+	index := make(map[crdtID]int, n)
+	for i, it := range items {
+		index[it.id] = i
+	}
+	start, end := n, n+1 // virtual nodes for the sequence ends
+	neighbour := func(id crdtID, virtual int) int {
+		if id == (crdtID{}) {
+			return virtual
 		}
-		if dep != "" {
-			deps[k][dep] = true
+		if i, ok := index[id]; ok {
+			return i
+		}
+		return virtual // unknown neighbour: treated as the sequence end, as rmscene does
+	}
+	type edge struct{ from, to int }
+	seen := make(map[edge]bool, 2*n)
+	dependents := make([][]int, n+2)
+	indeg := make([]int, n+2)
+	link := func(from, to int) { // "to" comes after "from"
+		e := edge{from, to}
+		if from == to || seen[e] {
+			return
+		}
+		seen[e] = true
+		dependents[from] = append(dependents[from], to)
+		indeg[to]++
+	}
+	for i, it := range items {
+		link(neighbour(it.left, start), i)
+		link(i, neighbour(it.right, end))
+	}
+
+	var ready []int
+	for v := 0; v < n+2; v++ {
+		if indeg[v] == 0 {
+			ready = append(ready, v)
 		}
 	}
-	side := func(id crdtID, left bool) string {
-		if _, ok := byID[id]; !ok || id == (crdtID{}) {
-			if left {
-				return start
-			}
-			return end
-		}
-		return key(id)
-	}
-	keyItem := map[string]*item{}
-	for _, it := range byID {
-		k := key(it.id)
-		keyItem[k] = it
-		add(k, side(it.left, true))
-		add(side(it.right, false), k)
-	}
-	for _, d := range deps {
-		for dep := range d {
-			add(dep, "")
-		}
-	}
-	var out []*item
-	for len(deps) > 0 {
-		var ready []string
-		for k, d := range deps {
-			if len(d) == 0 {
-				ready = append(ready, k)
-			}
-		}
-		if len(ready) == 0 {
-			break // cycle: append the rest in id order below
-		}
-		var readyItems []*item
-		for _, k := range ready {
-			if it, ok := keyItem[k]; ok {
-				readyItems = append(readyItems, it)
-			}
-			delete(deps, k)
-		}
-		sort.Slice(readyItems, func(i, j int) bool { return readyItems[i].id.less(readyItems[j].id) })
-		out = append(out, readyItems...)
-		for _, d := range deps {
-			for _, k := range ready {
-				delete(d, k)
+	out := make([]*item, 0, n)
+	placed := make([]bool, n)
+	for len(ready) > 0 {
+		round := make([]*item, 0, len(ready))
+		for _, v := range ready {
+			if v < n {
+				round = append(round, items[v])
+				placed[v] = true
 			}
 		}
-		if len(deps) == 1 {
-			if _, ok := deps[end]; ok {
-				break
+		sort.Slice(round, func(i, j int) bool { return round[i].id.less(round[j].id) })
+		out = append(out, round...)
+		var next []int
+		for _, v := range ready {
+			for _, w := range dependents[v] {
+				indeg[w]--
+				if indeg[w] == 0 {
+					next = append(next, w)
+				}
 			}
 		}
+		ready = next
 	}
-	if len(out) < len(byID) { // cyclic links in a corrupt file: keep what is left in id order
-		placed := map[crdtID]bool{}
-		for _, it := range out {
-			placed[it.id] = true
-		}
+	if len(out) < n { // cyclic links in a corrupt file: keep the rest in id order
 		var rest []*item
-		for _, it := range byID {
-			if !placed[it.id] {
+		for i, it := range items {
+			if !placed[i] {
 				rest = append(rest, it)
 			}
 		}
