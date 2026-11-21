@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -286,6 +287,43 @@ func (app *ReactAppWrapper) getDocument(c *gin.Context) {
 	}
 
 	c.DataFromReader(http.StatusOK, -1, "application/octet-stream", reader, nil)
+}
+
+// getDocumentAnnotations returns the page order and handwriting for the viewer
+func (app *ReactAppWrapper) getDocumentAnnotations(c *gin.Context) {
+	uid := userID(c)
+	docid := common.ParamS(docIDParam, c)
+	ann, err := app.getBackend(c).Annotations(uid, docid)
+	if err != nil {
+		log.Errorf("annotations of %s: %v", docid, err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	c.JSON(http.StatusOK, ann)
+}
+
+// getDocumentPDF serves the unmodified PDF, so the browser keeps its links and text
+func (app *ReactAppWrapper) getDocumentPDF(c *gin.Context) {
+	uid := userID(c)
+	docid := common.ParamS(docIDParam, c)
+	reader, err := app.getBackend(c).OpenPDF(uid, docid)
+	if errors.Is(err, models.ErrNoPayload) {
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		log.Errorf("pdf of %s: %v", docid, err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	defer reader.Close()
+	c.Header("Content-Type", "application/pdf")
+	if rs, ok := reader.(io.ReadSeeker); ok {
+		// range requests let pdf.js fetch only the pages it shows (PDFs can be hundreds of MB)
+		http.ServeContent(c.Writer, c.Request, docid+".pdf", time.Time{}, rs)
+		return
+	}
+	c.DataFromReader(http.StatusOK, -1, "application/pdf", reader, nil)
 }
 
 func (app *ReactAppWrapper) getDocumentMetadata(c *gin.Context) {

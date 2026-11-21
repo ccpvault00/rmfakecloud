@@ -145,6 +145,32 @@ func (fs *FileSystemStorage) Export(uid, docid string) (r io.ReadCloser, err err
 	return reader, err
 }
 
+// ExportAnnotations returns the page order and handwriting of a document for the web viewer
+func (fs *FileSystemStorage) ExportAnnotations(uid, docid string) (*models.DocAnnotations, error) {
+	tree, err := fs.GetCachedTree(uid)
+	if err != nil {
+		return nil, err
+	}
+	doc, err := tree.FindDoc(docid)
+	if err != nil {
+		return nil, err
+	}
+	return models.AnnotationsFromHashDoc(doc, fs.BlobStorage(uid))
+}
+
+// ExportPDF opens the document's PDF (for an EPUB, the tablet's PDF rendition) unmodified
+func (fs *FileSystemStorage) ExportPDF(uid, docid string) (io.ReadCloser, error) {
+	tree, err := fs.GetCachedTree(uid)
+	if err != nil {
+		return nil, err
+	}
+	doc, err := tree.FindDoc(docid)
+	if err != nil {
+		return nil, err
+	}
+	return models.PDFFromHashDoc(doc, fs.BlobStorage(uid))
+}
+
 // UpdateBlobDocument updates metadata
 func (fs *FileSystemStorage) UpdateBlobDocument(uid, docID, name, parent string) (err error) {
 	tree, err := fs.GetCachedTree(uid)

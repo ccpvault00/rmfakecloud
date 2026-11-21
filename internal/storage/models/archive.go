@@ -43,8 +43,15 @@ func ArchiveFromHashDoc(doc *HashDoc, rs RemoteStorage) (*exporter.MyArchive, er
 				return nil, err
 			}
 		case storage.EpubFileExt:
+			// the tablet keeps a PDF rendition next to an EPUB; that is what gets annotated
+			if a.PayloadReader != nil {
+				continue
+			}
 			fallthrough
 		case storage.PdfFileExt:
+			if a.PayloadReader != nil {
+				a.PayloadReader.Close()
+			}
 			blob, err := rs.GetReader(f.Hash)
 			if err != nil {
 				return nil, err
