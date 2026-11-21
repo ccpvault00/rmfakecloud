@@ -66,8 +66,7 @@ clean:
 test: testui testgo
 
 testui:
-	echo "TODO: fix this"
-	#CI=true $(PNPM) test
+	$(PNPM) test
 
 testgo:
 	go test ./...
