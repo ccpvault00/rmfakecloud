@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"io"
 	"time"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/ddvk/rmfakecloud/internal/common"
 	"github.com/ddvk/rmfakecloud/internal/messages"
 	"github.com/ddvk/rmfakecloud/internal/storage"
+	"github.com/ddvk/rmfakecloud/internal/storage/models"
 	"github.com/ddvk/rmfakecloud/internal/ui/viewmodel"
 	log "github.com/sirupsen/logrus"
 )
@@ -129,4 +131,15 @@ func (d *backend10) DeleteDocument(uid, docID string) (err error) {
 	log.Info(uiLogger, "Deleted document id: ", docID)
 	d.hub.Notify(uid, webDevice, ntf, messages.DocDeletedEvent)
 	return nil
+}
+
+// errSync15Only: the annotation viewer reads the sync 1.5 blob tree
+var errSync15Only = errors.New("only available for sync 1.5 documents")
+
+func (d *backend10) Annotations(uid, docID string) (*models.DocAnnotations, error) {
+	return nil, errSync15Only
+}
+
+func (d *backend10) OpenPDF(uid, docID string) (io.ReadCloser, error) {
+	return nil, errSync15Only
 }

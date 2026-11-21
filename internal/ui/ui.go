@@ -28,6 +28,8 @@ type backend interface {
 	UpdateDocument(uid, docID, name, parent string) (err error)
 	DeleteDocument(uid, docID string) (err error)
 	Sync(uid string)
+	Annotations(uid, docID string) (*models.DocAnnotations, error)
+	OpenPDF(uid, docID string) (io.ReadCloser, error)
 }
 type codeGenerator interface {
 	NewCode(string) (string, error)
@@ -51,6 +53,8 @@ type blobHandler interface {
 	CreateBlobFolder(uid, name, parent string) (doc *storage.Document, err error)
 	Export(uid, docid string) (io.ReadCloser, error)
 	ExportRmDoc(uid, docid string) (io.ReadCloser, error)
+	ExportAnnotations(uid, docid string) (*models.DocAnnotations, error)
+	ExportPDF(uid, docid string) (io.ReadCloser, error)
 }
 
 type notificationHub interface {

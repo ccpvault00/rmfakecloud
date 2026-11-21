@@ -5,6 +5,7 @@ import (
 
 	"github.com/ddvk/rmfakecloud/internal/app/hub"
 	"github.com/ddvk/rmfakecloud/internal/storage"
+	"github.com/ddvk/rmfakecloud/internal/storage/models"
 	"github.com/ddvk/rmfakecloud/internal/ui/viewmodel"
 	"github.com/google/uuid"
 )
@@ -44,6 +45,14 @@ func (b *backend15) CreateFolder(uid, name, parent string) (doc *storage.Documen
 
 func (b *backend15) DeleteDocument(uid, docID string) (err error) {
 	return b.blobHandler.DeleteBlobDocument(uid, docID)
+}
+
+func (b *backend15) Annotations(uid, docID string) (*models.DocAnnotations, error) {
+	return b.blobHandler.ExportAnnotations(uid, docID)
+}
+
+func (b *backend15) OpenPDF(uid, docID string) (io.ReadCloser, error) {
+	return b.blobHandler.ExportPDF(uid, docID)
 }
 
 func (b *backend15) Sync(uid string) {
