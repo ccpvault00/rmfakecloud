@@ -44,6 +44,8 @@ class FakeApi:
         self.docs: dict[str, FakeDoc] = {}
         self._ids = (f"id{n}" for n in itertools.count(1))
         self.calls: list[str] = []
+        # rmfakecloud fills `type` with the document name for web-UI uploads (blobstore.go CreateDocument)
+        self.type_is_name = False
 
     # tablet-side helpers
     def add(self, name: str, parent: str, type_: str, payload: bytes = b"", ann: dict[str, Any] | None = None) -> str:
@@ -70,7 +72,8 @@ class FakeApi:
             if d.folder:
                 kids = [entry(c) for c in self.docs.values() if c.parent == d.id]
                 return {"id": d.id, "name": d.name, "children": kids, "lastModified": "t", "isFolder": True}
-            return {"id": d.id, "name": d.name, "type": d.type, "lastModified": f"t{d.modified}", "size": d.size}
+            shown = d.name if self.type_is_name else d.type
+            return {"id": d.id, "name": d.name, "type": shown, "lastModified": f"t{d.modified}", "size": d.size}
 
         return {
             "Entries": [entry(d) for d in self.docs.values() if d.parent == ""],
@@ -92,7 +95,9 @@ class FakeApi:
         d.meta += 1
 
     def annotations(self, doc_id: str) -> dict[str, Any]:
-        return self.docs[doc_id].ann
+        self.calls.append(f"annotations {doc_id}")
+        d = self.docs[doc_id]
+        return {"fileType": d.type, "hasPdf": d.type == "pdf", **d.ann}
 
     def pdf(self, doc_id: str) -> bytes | None:
         d = self.docs[doc_id]

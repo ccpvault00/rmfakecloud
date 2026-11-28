@@ -207,3 +207,41 @@ def test_tablet_epub_annotation_is_noted_not_written(env):
     assert any("EPUB" in getattr(a, "message", "") for a in rep.actions)
     rep = run()
     assert {type(a).__name__ for a in rep.actions} <= {"Refresh"}
+
+
+# --- the server reports the document name as `type` for web-UI uploads (seen live 2026-11-28) ---
+
+
+def test_name_as_type_keeps_epub_names_and_is_idle(env):
+    root, fake, _, run, _ = env
+    fake.type_is_name = True
+    run()
+    rep = run()
+    assert {type(a).__name__ for a in rep.actions} <= {"Refresh"}, rep.actions
+    assert (root / "books" / "novel.epub").read_bytes() == b"PK-epub"
+    assert not (root / "books" / "novel.pdf").exists()
+    assert not [c for c in fake.calls if c.startswith("annotations")], "tracked docs use the recorded kind"
+
+
+def test_name_as_type_writes_handwriting_over_the_pdf_not_blank_pages(env):
+    root, fake, _, run, _ = env
+    fake.type_is_name = True
+    run()
+    fake.write(fake.find("stats").id, [stroke()], page=1)
+    run()
+    out = pymupdf.open(root / "books" / "stats.pdf")
+    assert out.page_count == 2
+    assert "stats page 1" in out[0].get_text(), "original PDF content kept"
+    assert out[1].get_drawings()
+
+
+def test_name_as_type_new_tablet_documents_ask_the_server(env):
+    root, fake, _, run, _ = env
+    fake.type_is_name = True
+    run()
+    papers = fake.find("papers").id
+    fake.add("Tablet book", papers, "epub", b"PK-tablet")
+    fake.add("Tablet paper", papers, "pdf", make_pdf(1, "tp"))
+    run()
+    assert (root / "papers" / "Tablet book.epub").read_bytes() == b"PK-tablet"
+    assert "tp page 1" in pymupdf.open(root / "papers" / "Tablet paper.pdf")[0].get_text()

@@ -123,6 +123,10 @@ def test_two_way_against_real_server(server: api.Client, tmp_path: Path):
     (root / "papers" / "ml" / "attention.pdf").write_bytes(make_pdf(2, "attention"))
     (root / "books" / "stats.pdf").write_bytes(make_pdf(2, "stats"))
     (root / "books" / "old.pdf").write_bytes(make_pdf(1, "old"))
+    epub = io.BytesIO()
+    with zipfile.ZipFile(epub, "w") as z:
+        z.writestr("mimetype", "application/epub+zip")
+    (root / "books" / "novel.epub").write_bytes(epub.getvalue())
 
     def run(**kw):
         rep = Engine(server, root, "ccp_library", tmp_path / "state.json", tmp_path / "trash", 20).run(Options(**kw), today="2026-11-27")
@@ -130,10 +134,11 @@ def test_two_way_against_real_server(server: api.Client, tmp_path: Path):
         return [type(a).__name__ for a in rep.actions if type(a).__name__ not in ("Refresh", "Note")]
 
     # 1. first run uploads into a new folder tree
-    assert sorted(run()) == ["Upload"] * 3
-    assert tree_paths(server) == {"ccp_library/papers/ml/attention", "ccp_library/books/stats", "ccp_library/books/old"}
-    # 2. nothing changed -> nothing to do (signatures recorded from the real tree)
+    assert sorted(run()) == ["Upload"] * 4
+    assert tree_paths(server) == {"ccp_library/papers/ml/attention", "ccp_library/books/stats", "ccp_library/books/old", "ccp_library/books/novel"}
+    # 2. nothing changed -> nothing to do (signatures recorded from the real tree, whose `type` is the name)
     assert run() == []
+    assert (root / "books" / "novel.epub").exists() and not (root / "books" / "novel.pdf").exists()
 
     # 3. handwriting on the tablet replaces the local PDF, once
     annotate_on_tablet(server, find_id(server, "stats"), tmp_path)
@@ -153,7 +158,7 @@ def test_two_way_against_real_server(server: api.Client, tmp_path: Path):
     server.move(stats_id, "Statistics", _folder_id(server, "books"))
     assert sorted(run()) == ["MoveLocal", "MoveRemote", "TrashRemote"]
     assert old_id in trash_ids(server)
-    assert tree_paths(server) == {"ccp_library/papers/Attention", "ccp_library/books/Statistics"}
+    assert tree_paths(server) == {"ccp_library/papers/Attention", "ccp_library/books/Statistics", "ccp_library/books/novel"}
     assert (root / "books" / "Statistics.pdf").exists() and not (root / "books" / "stats.pdf").exists()
     assert run() == []
 
