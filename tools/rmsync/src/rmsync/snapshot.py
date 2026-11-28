@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -44,15 +44,32 @@ class RemoteSnapshot:
 
 
 def kind_of(doc_type: str) -> Kind:
-    """Tablet file type -> Kind (anything that is not a PDF or EPUB is a notebook)."""
+    """A document's own ``.content`` fileType -> Kind (anything that is not a PDF or EPUB is a notebook)."""
     try:
         return Kind(doc_type)
     except ValueError:
         return Kind.NOTEBOOK
 
 
+Resolver = Callable[[str], Kind]  # doc id -> Kind, for documents whose tree entry has no usable type
+
+
+def _tree_kind(entry: dict[str, Any], resolve: Resolver | None) -> Kind:
+    """Kind of a tree entry, trusting only the three real ``type`` values.
+
+    rmfakecloud puts the document *name* in ``type`` for web-UI uploads (until it reloads the
+    document), so anything else is
+    resolved by ``resolve`` (or, outside the synced folder, where it does not matter, taken as a notebook).
+    """
+    raw = str(entry.get("type", ""))
+    if raw in {k.value for k in Kind}:
+        return Kind(raw)
+    return resolve(str(entry["id"])) if resolve else Kind.NOTEBOOK
+
+
 def _safe(name: str) -> str:
-    return name.replace("/", "-").strip() or "untitled"
+    # kept verbatim (a trailing space is legal and the local file has it); only "/" and empty names change
+    return name.replace("/", "-") if name.strip() else "untitled"
 
 
 def doc_path(reldir: str, name: str, kind: Kind) -> str:
@@ -61,11 +78,11 @@ def doc_path(reldir: str, name: str, kind: Kind) -> str:
     return f"{reldir}/{filename}" if reldir else filename
 
 
-def _doc(entry: dict[str, Any], where: Where, path: str = "") -> RemoteDoc:
+def _doc(entry: dict[str, Any], where: Where, kind: Kind, path: str = "") -> RemoteDoc:
     return RemoteDoc(
         doc_id=str(entry["id"]),
         name=str(entry.get("name", "")),
-        kind=kind_of(str(entry.get("type", ""))),
+        kind=kind,
         modified=str(entry.get("lastModified", "")),
         size=int(entry.get("size", 0)),
         where=where,
@@ -73,23 +90,25 @@ def _doc(entry: dict[str, Any], where: Where, path: str = "") -> RemoteDoc:
     )
 
 
-def _walk(entries: Iterable[dict[str, Any]], where: Where, snap: RemoteSnapshot, reldir: str | None) -> None:
+def _walk(entries: Iterable[dict[str, Any]], where: Where, snap: RemoteSnapshot, reldir: str | None, resolve: Resolver) -> None:
     for e in entries:
         if e.get("isFolder"):
             sub = None if reldir is None else (f"{reldir}/{_safe(e['name'])}" if reldir else _safe(e["name"]))
             if sub is not None and where == Where.SCOPE:
                 snap.folders.setdefault(sub, str(e["id"]))
-            _walk(e.get("children") or [], where, snap, sub)
+            _walk(e.get("children") or [], where, snap, sub, resolve)
         else:
             if where == Where.SCOPE and reldir is not None:
-                kind = kind_of(str(e.get("type", "")))
-                snap.docs[str(e["id"])] = _doc(e, where, doc_path(reldir, str(e.get("name", "")), kind))
+                kind = _tree_kind(e, resolve)
+                snap.docs[str(e["id"])] = _doc(e, where, kind, doc_path(reldir, str(e.get("name", "")), kind))
             else:
-                snap.docs[str(e["id"])] = _doc(e, Where.ELSEWHERE if where == Where.SCOPE else where)
+                snap.docs[str(e["id"])] = _doc(e, Where.ELSEWHERE if where == Where.SCOPE else where, _tree_kind(e, None))
 
 
-def scan_remote(tree: dict[str, Any], folder: str) -> RemoteSnapshot:
+def scan_remote(tree: dict[str, Any], folder: str, resolve: Resolver) -> RemoteSnapshot:
     """Split the tree into documents in the synced folder, in the trash and elsewhere.
+
+    ``resolve`` gives the kind of a synced-folder document whose tree ``type`` is not usable.
 
     Raises:
         ValueError: if more than one top-level folder has the synced folder's name.
@@ -103,8 +122,8 @@ def scan_remote(tree: dict[str, Any], folder: str) -> RemoteSnapshot:
         if roots and e is roots[0]:
             snap.root_id = str(e["id"])
             snap.folders[""] = snap.root_id
-            _walk(e.get("children") or [], Where.SCOPE, snap, "")
+            _walk(e.get("children") or [], Where.SCOPE, snap, "", resolve)
         else:
-            _walk([e], Where.SCOPE, snap, None)
-    _walk(tree.get("Trash") or [], Where.TRASH, snap, None)
+            _walk([e], Where.SCOPE, snap, None, resolve)
+    _walk(tree.get("Trash") or [], Where.TRASH, snap, None, resolve)
     return snap

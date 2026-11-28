@@ -100,12 +100,21 @@ class Engine:
         self.entries: dict[str, Entry] = {}
         self.snap = snapshot.RemoteSnapshot()
         self.touched: set[str] = set()
+        self._kinds: dict[str, Kind] = {}
         self._stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 
     # --- helpers ---------------------------------------------------------------------------
 
     def _abs(self, rel: str) -> Path:
         return self.root.joinpath(*PurePosixPath(rel).parts)
+
+    def _kind(self, doc_id: str) -> Kind:
+        """Kind of a document the tree does not type: as recorded when synced, else from its own .content."""
+        if doc_id in self.entries:
+            return self.entries[doc_id].kind
+        if doc_id not in self._kinds:
+            self._kinds[doc_id] = snapshot.kind_of(str(self.api.annotations(doc_id).get("fileType", "")))
+        return self._kinds[doc_id]
 
     def _save(self) -> None:
         state.save(self.state_file, self.entries, self.root, self.folder)
@@ -239,7 +248,7 @@ class Engine:
         local = snapshot.scan_local(self.root)
         if self.entries and not local:
             raise SyncAborted(f"{self.root} has no PDF/EPUB files but {len(self.entries)} were synced before; refusing to mirror that")
-        self.snap = snapshot.scan_remote(self.api.tree(), self.folder)
+        self.snap = snapshot.scan_remote(self.api.tree(), self.folder, self._kind)
 
         hasher: Callable[[str], str] = cache(lambda rel: sha256_file(self._abs(rel)))
 
@@ -267,7 +276,7 @@ class Engine:
             self._save()
 
         if self.touched:
-            self.snap = snapshot.scan_remote(self.api.tree(), self.folder)
+            self.snap = snapshot.scan_remote(self.api.tree(), self.folder, self._kind)
             for doc_id in self.touched & self.entries.keys():
                 r = self.snap.docs.get(doc_id)
                 if r is not None:
