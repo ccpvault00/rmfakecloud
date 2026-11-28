@@ -1,0 +1,20 @@
+# systemd user unit: the PC side of rmshot (receives reMarkable screenshots over Tailscale).
+#
+#   cp rmshot-recv.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now rmshot-recv
+#
+#   -listen  this PC's Tailscale IP (tailscale ip -4) and a free port
+#   -allow   the tablet's Tailscale IP (only it may post)
+#   -dir     where the rm_shot_*.png files go (the /img skill's inbox)
+[Unit]
+Description=rmshot receiver (reMarkable screenshots -> ~/Dropbox/imgtmp)
+After=network-online.target
+
+[Service]
+ExecStart=%h/.local/bin/rmshot recv -listen 100.125.113.28:18474 -allow 100.102.185.106 -dir %h/Dropbox/imgtmp
+# The Tailscale address does not exist until tailscaled is up, so binding can fail at boot: keep retrying.
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=default.target
