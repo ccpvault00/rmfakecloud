@@ -129,6 +129,7 @@ func runDaemon(args []string) error {
 	fingers := fs.Int("fingers", 4, "fingers to hold")
 	hold := fs.Duration("hold", time.Second, "how long to hold them")
 	retry := fs.Duration("retry", time.Minute, "retry interval while shots are waiting")
+	lightDir := fs.String("light", "/sys/class/backlight/rm_frontlight", "front light to blink: 1 = captured, 2 = on the PC, 3 = capture failed (\"\" = off)")
 	_ = fs.Parse(args)
 	if *dest == "" {
 		return fmt.Errorf("-dest is required")
@@ -142,6 +143,15 @@ func runDaemon(args []string) error {
 		client.Transport = &http.Transport{Proxy: http.ProxyURL(u)}
 	}
 	ob := &Outbox{Dir: *dir, Dest: *dest, Client: client}
+	var light *Light
+	if *lightDir != "" {
+		light = &Light{Dir: *lightDir, Pulse: 350 * time.Millisecond}
+	}
+	blink := func(n int) {
+		if err := light.Blink(n); err != nil {
+			log.Printf("blink: %v", err)
+		}
+	}
 
 	dev, err := touchDevice(*devName)
 	if err != nil {
@@ -162,6 +172,7 @@ func runDaemon(args []string) error {
 				log.Printf("delivery pending (%d sent): %v", n, err)
 			} else if n > 0 {
 				log.Printf("delivered %d shot(s)", n)
+				blink(2)
 			}
 		}
 	}()
@@ -200,9 +211,11 @@ func runDaemon(args []string) error {
 			name, err := grabNow(ob)
 			if err != nil {
 				log.Printf("capture failed: %v", err)
+				blink(3)
 				continue
 			}
 			log.Printf("captured %s in %s", filepath.Base(name), time.Since(start).Round(time.Millisecond))
+			blink(1)
 			poke()
 		}
 	}

@@ -4,6 +4,10 @@ Hold **four fingers** on the screen for a second: the tablet captures the screen
 toolbar included) and sends it over Tailscale to this PC, which saves it as
 `~/Dropbox/imgtmp/rm_shot_YYYYMMDD-HHMMSS.png` (named and dated by the capture time).
 
+The front light tells you how it went (each blink is full brightness, then off; your level is restored):
+**1 blink** captured, **2 blinks** on the PC, **3 blinks** capture failed. A shot that could not be
+delivered blinks twice later, when it finally arrives.
+
 ```
 tablet: rmshot daemon ── touch (read-only) ─► capture from xochitl's memory ─► outbox/
                          └─ POST via tailscaled's HTTP proxy (127.0.0.1:1055) ─► PC: rmshot recv ─► imgtmp/
