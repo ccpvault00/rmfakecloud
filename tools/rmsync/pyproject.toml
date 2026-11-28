@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rmsync"
+version = "0.1.0"
+description = "Two-way sync between a local folder and a reMarkable folder through rmfakecloud"
+requires-python = ">=3.10"
+dependencies = ["pymupdf>=1.24", "pyyaml>=6"]
+
+[project.scripts]
+rmsync = "rmsync.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# --- quality gates (from ~/.claude/templates/python/pyproject-quality.toml) ---
+
+[tool.ruff]
+line-length = 200
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "ANN", "D", "T20", "PTH", "BLE", "S102", "S301", "S307", "S602", "S605", "S606", "TID251", "G"]
+ignore = ["D100", "D104", "D105", "D107", "ANN401"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"pickle".msg = "No pickle for storage: use JSON."
+"os.system".msg = "Use subprocess.run() with an explicit argument list."
+"os.path".msg = "Use pathlib.Path."
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "ANN", "D"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_unreachable = true
+mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = ["rmsync.render"]
+disallow_untyped_calls = false  # PyMuPDF ships py.typed but leaves many functions unannotated
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "--strict-markers -ra"
+markers = ["slow: needs the rmfakecloud binary (dist/rmfakecloud-x64); deselect with -m 'not slow'"]

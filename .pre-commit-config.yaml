@@ -1,0 +1,35 @@
+# Gates for the Python tool in tools/rmsync (the Go server keeps its own Makefile checks).
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: no-commit-to-branch
+        args: [--branch, main, --branch, master]
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: detect-private-key
+      - id: check-merge-conflict
+      - id: check-yaml
+        files: ^tools/rmsync/
+      - id: end-of-file-fixer
+        files: ^tools/rmsync/
+      - id: trailing-whitespace
+        files: ^tools/rmsync/
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.8
+    hooks:
+      - id: ruff-check
+        args: [--fix, --exit-non-zero-on-fix]
+        files: ^tools/rmsync/
+      - id: ruff-format
+        files: ^tools/rmsync/
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy (rmsync)
+        entry: mypy --config-file tools/rmsync/pyproject.toml tools/rmsync/src
+        language: system
+        pass_filenames: false
+        files: ^tools/rmsync/src/
