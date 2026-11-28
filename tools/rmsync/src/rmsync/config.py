@@ -57,6 +57,29 @@ def _path(raw: dict[str, Any], key: str) -> Path:
     return Path(str(raw[key])).expanduser()
 
 
+def profiles(directory: Path) -> list[Path]:
+    """Every ``*.yaml`` in ``directory``: ``config.yaml`` first, then by name."""
+    if not directory.is_dir():
+        return []
+    found = sorted(directory.glob("*.yaml"))
+    return sorted(found, key=lambda p: p.name != DEFAULT_PATH.name)
+
+
+def check_distinct(loaded: list[tuple[Path, Config]]) -> None:
+    """Refuse profiles that would sync the same thing twice (they would fight over it)."""
+    for i, (pa, a) in enumerate(loaded):
+        for pb, b in loaded[i + 1 :]:
+            pair = f"{pa.name} and {pb.name}"
+            if a.remote_folder.casefold() == b.remote_folder.casefold():
+                raise ConfigError(f"{pair} use the same remote_folder {a.remote_folder!r}")
+            for key in ("state_file", "trash_dir"):
+                if getattr(a, key).resolve() == getattr(b, key).resolve():
+                    raise ConfigError(f"{pair} use the same {key} {getattr(a, key)}")
+            ra, rb = a.local_root.resolve(), b.local_root.resolve()
+            if ra == rb or ra.is_relative_to(rb) or rb.is_relative_to(ra):
+                raise ConfigError(f"{pair}: one local_root is inside the other ({ra}, {rb})")
+
+
 def load(path: Path = DEFAULT_PATH) -> Config:
     """Read and validate the config file."""
     if not path.exists():

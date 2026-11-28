@@ -25,6 +25,11 @@ rmsync --dry-run                        # what would happen
 rmsync                                  # do it
 ```
 
+Several folder pairs: one YAML file per pair in `~/.config/rmsync/` (copy `config.yaml`, change
+`local_root`, `remote_folder`, `state_file`, `trash_dir`). Plain `rmsync` syncs every `*.yaml` there,
+`config.yaml` first; `rmsync --config FILE` syncs one. Profiles that share a tablet folder, a state or
+trash path, or nested local folders are refused before anything runs.
+
 Safety: the run stops before changing anything when the local folder is missing or has
 no PDFs/EPUBs although files were synced before, or when more than `max_deletes`
 deletions are planned (`--allow-deletes` to confirm). State: `state_file` (JSON, saved after

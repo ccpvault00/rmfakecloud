@@ -16,6 +16,7 @@ log = logging.getLogger("rmsync")
 
 TOKEN_FILE = Path("~/.cache/rmsync/token").expanduser()
 TOKEN_MAX_AGE = 20 * 3600  # the server's tokens last 24 h
+CONFIG_DIR = config.DEFAULT_PATH.parent  # plain `rmsync` syncs every profile (*.yaml) here
 
 
 def _token(cfg: config.Config) -> str:
@@ -41,8 +42,8 @@ def _parser() -> argparse.ArgumentParser:
     )
     ap.add_argument("-n", "--dry-run", action="store_true", help="show what would happen, change nothing")
     ap.add_argument("--allow-deletes", action="store_true", help="allow more deletions than max_deletes in this run")
-    ap.add_argument("--config", type=Path, default=config.DEFAULT_PATH, help=f"config file (default {config.DEFAULT_PATH})")
-    ap.add_argument("--init", action="store_true", help="write an example config file and exit")
+    ap.add_argument("--config", type=Path, help=f"sync only this config file (default: every *.yaml in {CONFIG_DIR}, config.yaml first)")
+    ap.add_argument("--init", action="store_true", help=f"write an example config file (default {CONFIG_DIR / config.DEFAULT_PATH.name}) and exit")
     ap.add_argument("-v", "--verbose", action="store_true", help="debug logging")
     ap.add_argument("--version", action="version", version=f"rmsync {__version__}")
     return ap
@@ -54,16 +55,34 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, format="%(message)s", stream=sys.stderr)
 
     if args.init:
-        if args.config.exists():
-            log.error("%s already exists; not overwriting", args.config)
+        target: Path = args.config or CONFIG_DIR / config.DEFAULT_PATH.name
+        if target.exists():
+            log.error("%s already exists; not overwriting", target)
             return 1
-        args.config.parent.mkdir(parents=True, exist_ok=True)
-        args.config.write_text(config.EXAMPLE)
-        log.info("wrote %s; edit it, then put the web-UI password in the password_file (chmod 600)", args.config)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(config.EXAMPLE)
+        log.info("wrote %s; edit it, then put the web-UI password in the password_file (chmod 600)", target)
         return 0
 
+    paths = [args.config] if args.config else config.profiles(CONFIG_DIR) or [CONFIG_DIR / config.DEFAULT_PATH.name]
     try:
-        cfg = config.load(args.config)
+        loaded = [(p, config.load(p)) for p in paths]
+        config.check_distinct(loaded)
+    except (config.ConfigError, ValueError, OSError) as err:  # nothing has run yet
+        log.error("error: %s", err)
+        return 1
+
+    status = 0
+    for path, cfg in loaded:
+        if len(loaded) > 1:
+            log.info("== %s: %s <-> %s", path.name, cfg.local_root, cfg.remote_folder)
+        status = max(status, _sync(cfg, args))
+    return status
+
+
+def _sync(cfg: config.Config, args: argparse.Namespace) -> int:
+    """One profile; 0 ok, 1 not run (error/abort), 2 some actions failed."""
+    try:
         client = api.Client(cfg.url, _token(cfg))
         engine = Engine(client, cfg.local_root, cfg.remote_folder, cfg.state_file, cfg.trash_dir, cfg.max_deletes)
         report = engine.run(Options(dry_run=args.dry_run, allow_deletes=args.allow_deletes))
